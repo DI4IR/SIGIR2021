@@ -59,7 +59,6 @@ def train(args):
 
             positive_score, negative_score = round(colbert_out1.mean().item(), 2), round(colbert_out2.mean().item(), 2)
             print("#>>>   ", positive_score, negative_score, '\t\t|\t\t', positive_score - negative_score)
-            print(out.size())
             loss = criterion(out.squeeze(1), labels[:out.size(0)])
             loss = loss / args.accumsteps
             loss.backward()
