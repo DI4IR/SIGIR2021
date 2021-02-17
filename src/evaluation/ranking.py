@@ -9,24 +9,10 @@ from src.evaluation.metrics import Metrics
 
 def rerank(args, query, pids, passages, index=None):
     colbert = args.colbert
-    Q = colbert.query([query])
-
-    if index is None:
-        tokenized_passages = list(args.pool.map(colbert.tokenizer.tokenize, passages))
-        scores = [colbert.score(Q, colbert.doc(D)).cpu() for D in batch(tokenized_passages, args.bsize)]
-        scores = torch.cat(scores).sort(descending=True)
-    else:
-        args.buffer[:len(pids)].zero_()
-        docs = [index[pid] for pid in pids]
-
-        for idx, d in enumerate(docs):
-            args.buffer[idx, :len(d)] = d
-
-        scores = colbert.score(Q, args.buffer[:len(pids)].cuda().float())
-        scores = scores.sort(descending=True)
-
+    #tokenized_passages = list(args.pool.map(colbert.tokenizer.tokenize, passages))
+    scores = [colbert.forward([query] * len(D), D)[0].cpu() for D in batch(passages, args.bsize)]
+    scores = torch.cat(scores).squeeze(1).sort(descending=True)
     ranked = scores.indices.tolist()
-
     ranked_scores = scores.values.tolist()
     ranked_pids = [pids[position] for position in ranked]
     ranked_passages = [passages[position] for position in ranked]

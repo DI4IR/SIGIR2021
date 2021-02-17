@@ -56,7 +56,7 @@ class MultiBERT(BertPreTrainedModel):
 
     def convert_example(self, d, max_seq_length):
         max_length = min(MAX_LENGTH, max_seq_length)
-        inputs = self.tokenizer.encode_plus(d, add_special_tokens=True, max_length=max_length)
+        inputs = self.tokenizer.encode_plus(d, add_special_tokens=True, max_length=max_length, truncation=True)
 
         padding_length = max_length - len(inputs["input_ids"])
         attention_mask = ([1] * len(inputs["input_ids"])) + ([0] * padding_length)
@@ -73,7 +73,7 @@ class MultiBERT(BertPreTrainedModel):
         offset = 0
         pairs, X = [], []
 
-        for tokenized_content, word_indexes, terms in D:
+        for tokenized_content, terms in D:
             terms = [(t, idx, offset + pos) for pos, (t, idx) in enumerate(terms)]
             offset += len(terms)
             pairs.append(self.convert_example(tokenized_content, max_seq_length))
