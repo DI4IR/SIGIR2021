@@ -1,53 +1,98 @@
-import os
 import random
+import datetime
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
-from argparse import ArgumentParser
+from time import time
+from math import ceil
+from src.model_multibert import *
 from multiprocessing import Pool
+from src.evaluation.loaders import load_checkpoint
 
-from src.parameters import DEFAULT_DATA_DIR, DEVICE
-from src.utils import print_message, create_directory
+MB_SIZE = 500*1024
 
-from src.evaluation.loaders import load_colbert
-from src.indexing.encoder import encode
-
-
-def main():
-    random.seed(123456)
-
-    parser = ArgumentParser(description='Exhaustive (non-index-based) evaluation of re-ranking with ColBERT.')
-
-    parser.add_argument('--index', dest='index', required=True)
-    parser.add_argument('--checkpoint', dest='checkpoint', required=True)
-    parser.add_argument('--collection', dest='collection', default='collection.tsv')
-
-    parser.add_argument('--data_dir', dest='data_dir', default=DEFAULT_DATA_DIR)
-    parser.add_argument('--output_dir', dest='output_dir', default='outputs.index/')
-
-    parser.add_argument('--bsize', dest='bsize', default=128, type=int)
-    parser.add_argument('--bytes', dest='bytes', default=2, choices=[2, 4], type=int)
-    parser.add_argument('--subsample', dest='subsample', default=None)  # TODO: Add this
-
-    # TODO: For the following four arguments, default should be None. If None, they should be loaded from checkpoint.
-    parser.add_argument('--similarity', dest='similarity', default='cosine', choices=['cosine', 'l2'])
-    parser.add_argument('--dim', dest='dim', default=128, type=int)
-    parser.add_argument('--query_maxlen', dest='query_maxlen', default=32, type=int)
-    parser.add_argument('--doc_maxlen', dest='doc_maxlen', default=180, type=int)
-
-    # TODO: Add resume functionality
-
-    args = parser.parse_args()
-    args.input_arguments = args
-    args.pool = Pool(10)
-
-    create_directory(args.output_dir)
-
-    args.index = os.path.join(args.output_dir, args.index)
-    args.collection = os.path.join(args.data_dir, args.collection)
-
-    args.colbert, args.checkpoint = load_colbert(args)
-
-    encode(args)
+def print_message(*s):
+    s = ' '.join(map(str, s))
+    print("[{}] {}".format(datetime.datetime.utcnow().strftime("%b %d, %H:%M:%S"), s), flush=True)
 
 
-if __name__ == "__main__":
-    main()
+print_message("#> Loading model checkpoint.")
+net = MultiBERT.from_pretrained('bert-base-uncased')
+net = net.to(DEVICE)
+load_checkpoint("/scratch/am8949/MultiBERT/colbert-150000.dnn", net)
+net.eval()
+
+
+
+
+
+
+def tok(d):
+    d = cleanD(d, join=False)
+    content = ' '.join(d)
+    tokenized_content = net.tokenizer.tokenize(content)
+
+    terms = list(set([(t, d.index(t)) for t in d]))  # Quadratic!
+    word_indexes = list(accumulate([-1] + tokenized_content, lambda a, b: a + int(not b.startswith('##'))))
+    terms = [(t, word_indexes.index(idx)) for t, idx in terms]
+    terms = [(t, idx) for (t, idx) in terms if idx < MAX_LENGTH]
+
+    return tokenized_content, terms
+
+
+
+def process_batch(g, super_batch):
+    print_message("Start process_batch()", "")
+
+    with torch.no_grad():
+        super_batch = list(p.map(tok, super_batch))
+
+        sorted_super_batch = sorted([(v, idx) for idx, v in enumerate(super_batch)], key=lambda x: len(x[0][0]))
+        super_batch = [v for v, _ in sorted_super_batch]
+        super_batch_indices = [idx for _, idx in sorted_super_batch]
+
+        print_message("Done sorting", "")
+
+        every_term_score = []
+
+        for batch_idx in range(ceil(len(super_batch) / MB_SIZE)):
+            D = super_batch[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
+            IDXs = super_batch_indices[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
+            all_term_scores = net.index(D, len(D[-1][0])+2)
+            every_term_score += zip(IDXs, all_term_scores)
+
+        every_term_score = sorted(every_term_score)
+
+        lines = []
+        for _, term_scores in every_term_score:
+            term_scores = ', '.join([term + ": " + str(round(score, 3)) for term, score in term_scores])
+            lines.append(term_scores)
+
+    g.write('\n'.join(lines) + "\n")
+    g.flush()
+
+
+p = Pool(16)
+start_time = time()
+
+COLLECTION = "/scratch/am8949"
+with open(COLLECTION + '/index-Feb17.txt', 'w') as g:
+    with open(COLLECTION + '/collection-dT5q-newterms_unique.tsv') as f:
+        for idx, passage in enumerate(f):
+            if idx % (50*1024) == 0:
+                if idx > 0:
+                    process_batch(g, super_batch)
+                throughput = round(idx / (time() - start_time), 1)
+                print_message("Processed", str(idx), "passages so far [rate:", str(throughput), "passages per second]")
+                super_batch = []
+
+            passage = passage.strip()
+            pid, passage = passage.split('\t')
+            super_batch.append(passage)
+
+            assert int(pid) == idx
+
+        process_batch(g, super_batch)
+

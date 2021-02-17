@@ -1,5 +1,5 @@
 from src.parameters import DEVICE
-from src.model import ColBERT
+from src.model import MultiBERT
 from src.utils import print_message, load_checkpoint
 
 
@@ -58,11 +58,7 @@ def load_topK(topK_path):
 
 def load_colbert(args):
     print_message("#> Loading model checkpoint.")
-    colbert = ColBERT.from_pretrained('bert-base-uncased',
-                                      query_maxlen=args.query_maxlen,
-                                      doc_maxlen=args.doc_maxlen,
-                                      dim=args.dim,
-                                      similarity_metric=args.similarity)
+    colbert = MultiBERT.from_pretrained('bert-base-uncased')
     colbert = colbert.to(DEVICE)
     checkpoint = load_checkpoint(args.checkpoint, colbert)
     colbert.eval()
