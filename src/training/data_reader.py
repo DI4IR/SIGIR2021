@@ -11,7 +11,7 @@ from src.parameters import DEVICE, SAVED_CHECKPOINTS
 from src.model import MultiBERT
 from src.utils import print_message, save_checkpoint
 import re
-
+import datetime
 class TrainReader:
     def __init__(self, data_file):
         print_message("#> Training with the triples in", data_file, "...\n\n")
@@ -23,10 +23,10 @@ class TrainReader:
 
 def manage_checkpoints(colbert, optimizer, batch_idx):
     if batch_idx % 2000 == 0:
-        save_checkpoint("colbert.dnn", 0, batch_idx, colbert, optimizer)
+        save_checkpoint("colbert-12layers-max300.dnn", 0, batch_idx, colbert, optimizer)
 
     if batch_idx in SAVED_CHECKPOINTS:
-        save_checkpoint("colbert-" + str(batch_idx) + ".dnn", 0, batch_idx, colbert, optimizer)
+        save_checkpoint("colbert-12layers-max300-" + str(batch_idx) + ".dnn", 0, batch_idx, colbert, optimizer)
 
 
 def train(args):
@@ -53,13 +53,15 @@ def train(args):
             Q, D1, D2 = zip(*B)
 
             colbert_out, _ = colbert(Q + Q, D1 + D2)
+            colbert_out= colbert_out.squeeze(1)
+
             colbert_out1, colbert_out2 = colbert_out[:len(Q)], colbert_out[len(Q):]
 
             out = torch.stack((colbert_out1, colbert_out2), dim=-1)
 
             positive_score, negative_score = round(colbert_out1.mean().item(), 2), round(colbert_out2.mean().item(), 2)
             print("#>>>   ", positive_score, negative_score, '\t\t|\t\t', positive_score - negative_score)
-            loss = criterion(out.squeeze(1), labels[:out.size(0)])
+            loss = criterion(out, labels[:out.size(0)])
             loss = loss / args.accumsteps
             loss.backward()
 

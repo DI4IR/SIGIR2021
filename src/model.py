@@ -12,7 +12,7 @@ from src.utils2 import cleanQ, cleanD
 
 stem = PorterStemmer().stem
 
-MAX_LENGTH = 160
+MAX_LENGTH = 300
 
 
 def unique(seq):
@@ -120,7 +120,7 @@ class MultiBERT(BertPreTrainedModel):
         attention_mask = torch.tensor([f['attention_mask'] for f in pairs], dtype=torch.long).to(DEVICE)
         token_type_ids = torch.tensor([f['token_type_ids'] for f in pairs], dtype=torch.long).to(DEVICE)
 
-        outputs = self.myforward(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+        outputs = self.bert.forward(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
 
         hidden_state = outputs[0]
 
