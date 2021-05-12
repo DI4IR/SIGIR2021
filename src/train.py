@@ -4,7 +4,6 @@ import torch
 
 from argparse import ArgumentParser
 
-from src.parameters import DEFAULT_DATA_DIR
 from src.training.data_reader import train
 from src.utils import print_message, create_directory
 
@@ -20,7 +19,6 @@ def main():
     parser.add_argument('--bsize', dest='bsize', default=32, type=int)
     parser.add_argument('--accum', dest='accumsteps', default=2, type=int)
 
-    parser.add_argument('--data_dir', dest='data_dir', default=DEFAULT_DATA_DIR)
     parser.add_argument('--triples', dest='triples', default='triples.train.small.tsv')
     parser.add_argument('--output_dir', dest='output_dir', default='outputs.train/')
 
@@ -42,8 +40,6 @@ def main():
                                                "The batch size must be divisible by the number of gradient accumulation steps.")
     assert args.query_maxlen <= 512
     assert args.doc_maxlen <= 512
-
-    args.triples = os.path.join(args.data_dir, args.triples)
 
     train(args)
 
