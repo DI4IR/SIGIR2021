@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from time import time
 from math import ceil
-from src.model_multibert import *
+from src.model import *
 from multiprocessing import Pool
 from src.evaluation.loaders import load_checkpoint
 
@@ -21,7 +21,7 @@ def print_message(*s):
 print_message("#> Loading model checkpoint.")
 net = MultiBERT.from_pretrained('bert-base-uncased')
 net = net.to(DEVICE)
-load_checkpoint("/scratch/am8949/MultiBERT/colbert-12layers-max300-50000.dnn", net)
+load_checkpoint("/scratch/am8949/MultiBERT/colbert-12layers-100000.dnn", net)
 net.eval()
 
 
@@ -78,8 +78,8 @@ p = Pool(16)
 start_time = time()
 
 COLLECTION = "/scratch/am8949"
-with open(COLLECTION + '/index-Feb23.txt', 'w') as g:
-    with open(COLLECTION + '/collection-dT5q-newterms_unique.tsv') as f:
+with open(COLLECTION + '/queries.dev.test.txt', 'w') as g:
+    with open(COLLECTION + '/queries.dev.small.tsv') as f:
         for idx, passage in enumerate(f):
             if idx % (50*1024) == 0:
                 if idx > 0:
@@ -92,7 +92,7 @@ with open(COLLECTION + '/index-Feb23.txt', 'w') as g:
             pid, passage = passage.split('\t')
             super_batch.append(passage)
 
-            assert int(pid) == idx
+            #assert int(pid) == idx
 
         process_batch(g, super_batch)
 
