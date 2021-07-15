@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from argparse import ArgumentParser
 
 from time import time
 from math import ceil
@@ -16,17 +17,6 @@ MB_SIZE = 1024
 def print_message(*s):
     s = ' '.join(map(str, s))
     print("[{}] {}".format(datetime.datetime.utcnow().strftime("%b %d, %H:%M:%S"), s), flush=True)
-
-
-print_message("#> Loading model checkpoint.")
-net = MultiBERT.from_pretrained('bert-base-uncased')
-net = net.to(DEVICE)
-load_checkpoint("/scratch/am8949/MultiBERT/colbert-12layers-max300-50000.dnn", net)
-net.eval()
-
-
-
-
 
 
 def tok(d):
@@ -73,26 +63,63 @@ def process_batch(g, super_batch):
     g.write('\n'.join(lines) + "\n")
     g.flush()
 
+if __name__ == "__main__":
+    parser = ArgumentParser(description='Eval ColBERT with <query, positive passage, negative passage> triples.')
+    
+    #parser.add_argument('--bsize', dest='bsize', default=32, type=int)
+    #parser.add_argument('--triples', dest='triples', default='triples.train.small.tsv')
+    #parser.add_argument('--output_dir', dest='output_dir', default='outputs.train/')
+    #parser.add_argument('--similarity', dest='similarity', default='cosine', choices=['cosine', 'l2'])
 
-p = Pool(16)
-start_time = time()
+    parser.add_argument('--collection', default="./baseline_test", type=str)
+    parser.add_argument('--output_name', default="/index-July13%d.txt", type=str)
+    #parser.add_argument('--query_path', default="./collection-dT5-newterms_unique.tsv", type=str)
+    parser.add_argument('--query_path', type=str)
+    parser.add_argument('--ckpt', default='./colbert-12layers-max300-32000.dnn',type=str)
 
-COLLECTION = "/scratch/am8949"
-with open(COLLECTION + '/index-Feb23.txt', 'w') as g:
-    with open(COLLECTION + '/collection-dT5q-newterms_unique.tsv') as f:
+    args = parser.parse_args()
+    args.input_arguments = args
+
+    print_message("#> Loading model checkpoint.")
+    net = MultiBERT.from_pretrained('bert-base-uncased')
+    DEVICE = "cuda"
+    net = net.to(DEVICE)
+    load_checkpoint(args.ckpt, net)
+    net.eval()
+
+
+    p = Pool(16)
+    start_time = time()
+    #COLLECTION = "./baseline_test"
+    g = open(args.collection + args.output_name % 0, 'w')
+    #f = open(args.query_path)
+    text_id = 0
+
+    import os
+    import sys
+
+    expand_docs = [os.listdir(args.query_path)][:1]
+
+    for fname in expand_docs:
+        f = open(fname, 'r')
         for idx, passage in enumerate(f):
+            if idx > 100:
+                break
+            data = json.loads(passage)
+            id_ = data["id"]
+            contents = data["contents"]
             if idx % (50*1024) == 0:
                 if idx > 0:
                     process_batch(g, super_batch)
                 throughput = round(idx / (time() - start_time), 1)
                 print_message("Processed", str(idx), "passages so far [rate:", str(throughput), "passages per second]")
                 super_batch = []
+            if idx % 100001 == 0:
+                g.close()
+                text_id += 1
+                g = open(args.collection + args.output_name % text_id, "w")
 
-            passage = passage.strip()
-            pid, passage = passage.split('\t')
-            super_batch.append(passage)
-
+            super_batch.append(contents.strip())
             assert int(pid) == idx
-
         process_batch(g, super_batch)
 

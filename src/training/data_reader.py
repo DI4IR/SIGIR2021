@@ -66,6 +66,7 @@ def train(args):
             loss.backward()
 
             train_loss += loss.item()
+            #print(loss.item())
 
         torch.nn.utils.clip_grad_norm_(colbert.parameters(), 2.0)
 
