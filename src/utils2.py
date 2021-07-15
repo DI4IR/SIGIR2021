@@ -14,6 +14,7 @@ STOPLIST = ["a", "about", "also", "am", "an", "and", "another", "any", "anyone",
             "we're", "weren't", "we've", "will", "with", "without", "won't", "would", "wouldn't", "yes", "yet", "you",
             "you'd", "you'll", "your", "you're", "yours", "yourself", "yourselves", "you've"]
 
+printable = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ')
 printableX = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-. ')
 printable3X = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,.- ')
 
