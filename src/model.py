@@ -149,12 +149,8 @@ class MultiBERT(BertPreTrainedModel):
 
         hidden_state = outputs[0]
         pooled_output = torch.cat([hidden_state[i, list(map(lambda x: x[1], X[i]))] for i in range(bsize)])
-        pooled_output = self.pre_classifier(pooled_output)
-        pooled_output = nn.ReLU()(pooled_output)
-        pooled_output = self.dropout(pooled_output)
 
-        y_score = self.classifier(pooled_output)
-        y_score = torch.nn.functional.relu(y_score)
+        y_score = self.impact_score_encoder(pooled_output)
         y_score = y_score.squeeze().cpu().numpy().tolist()
         term_scores = [[(term, y_score[pos]) for term, _, pos in terms] for terms in X]
 
