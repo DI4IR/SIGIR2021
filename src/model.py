@@ -15,13 +15,8 @@ MAX_LENGTH = 300
 class MultiBERT(BertPreTrainedModel):
     def __init__(self, config):
         super(MultiBERT, self).__init__(config)
-
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-        self.regex_drop_char = re.compile('[^a-z0-9\s]+')
-        self.regex_multi_space = re.compile('\s+')
-
         self.bert = BertModel(config)
-        
         self.impact_score_encoder = nn.Sequential(
             nn.Linear(config.hidden_size, config.hidden_size),
             nn.ReLU(),
@@ -30,7 +25,6 @@ class MultiBERT(BertPreTrainedModel):
             nn.ReLU()
         )
         self.init_weights()
-
 
     def convert_example(self, d, max_seq_length):
         max_length = min(MAX_LENGTH, max_seq_length)
