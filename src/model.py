@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-from nltk.stem import PorterStemmer
 from random import sample, shuffle, randint
 
 from itertools import accumulate
@@ -10,14 +9,7 @@ import re
 from src.parameters import DEVICE
 from src.utils2 import cleanQ, cleanD
 
-stem = PorterStemmer().stem
-
 MAX_LENGTH = 300
-
-
-def unique(seq):
-    seen = set()
-    return [x for x in seq if not (x in seen or seen.add(x))]
 
 
 class MultiBERT(BertPreTrainedModel):

@@ -14,10 +14,6 @@ STOPLIST = ["a", "about", "also", "am", "an", "and", "another", "any", "anyone",
             "we're", "weren't", "we've", "will", "with", "without", "won't", "would", "wouldn't", "yes", "yet", "you",
             "you'd", "you'll", "your", "you're", "yours", "yourself", "yourselves", "you've"]
 
-printable = set(string.printable)
-printable = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ')
-printable3 = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,. ')
-
 printableX = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-. ')
 printable3X = set('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,.- ')
 
@@ -29,35 +25,6 @@ STOPLIST_ = list(map(lambda s: ''.join(filter(lambda x: x in printable, s)), STO
 STOPLIST = {}
 for w in STOPLIST_:
     STOPLIST[w] = True
-
-
-def clean(query):
-    query = ''.join(filter(lambda x: x in printable, query))
-    query = query.lower()
-    Q = query.split()
-    Q = map(lambda w: ''.join(list(filter(lambda l: l.isalnum(), w))), Q)
-    Q = filter(lambda w: w not in STOPLIST, Q)
-    Q = list(filter(lambda s: s != '', Q))
-    return ' '.join(Q)
-
-
-def clean2_slow(query):
-    query = ''.join(map(lambda x: ' ' if x not in printable else x, query))
-    query = query.lower()
-    Q = query.split()
-    Q = map(lambda w: ''.join(list(filter(lambda l: l.isalnum(), w))), Q)
-    Q = filter(lambda w: w not in STOPLIST, Q)
-    Q = list(filter(lambda s: s != '', Q))
-    return ' '.join(Q)
-
-
-def clean2(s, join=True):
-    s = [(x.lower() if x in printable else ' ') for x in s]
-    s = ''.join(s).split()
-    s = [w for w in s if w not in STOPLIST]
-
-    return ' '.join(s) if join else s
-
 
 def cleanD(s, join=True):
     s = [(x.lower() if x in printable3X else ' ') for x in s]
