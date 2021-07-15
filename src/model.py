@@ -21,10 +21,14 @@ class MultiBERT(BertPreTrainedModel):
         self.regex_multi_space = re.compile('\s+')
 
         self.bert = BertModel(config)
-        self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.pre_classifier = nn.Linear(config.hidden_size, config.hidden_size)
-        self.classifier = nn.Linear(config.hidden_size, 1)
-
+        
+        self.impact_score_encoder = nn.Sequential(
+            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.ReLU(),
+            nn.Dropout(config.hidden_dropout_prob),
+            nn.Linear(config.hidden_size, 1),
+            nn.ReLU()
+        )
         self.init_weights()
 
 
@@ -114,12 +118,7 @@ class MultiBERT(BertPreTrainedModel):
 
             return torch.tensor([[0.0]] * len(Q)).to(DEVICE), term_scores
 
-        pooled_output = self.pre_classifier(pooled_output)
-        pooled_output = nn.ReLU()(pooled_output)
-        pooled_output = self.dropout(pooled_output)
-
-        y_score = self.classifier(pooled_output)
-        y_score = torch.nn.functional.relu(y_score)
+        y_score = self.impact_score_encoder(pooled_output)
 
         x = torch.arange(bsize).expand(len(pfx_sum), bsize) < torch.tensor(pfx_sum).unsqueeze(1)
         y = torch.arange(bsize).expand(len(pfx_sum), bsize) >= torch.tensor([0] + pfx_sum[:-1]).unsqueeze(1)
