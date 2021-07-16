@@ -1,6 +1,5 @@
-from time import time
-
 from argparse import ArgumentParser
+from tqdm import tqdm
 from more_itertools import chunked
 
 import torch
@@ -55,7 +54,7 @@ def main():
     parser.add_argument('--model', dest='model', required=True)
 
     # The batch size
-    parser.add_argument('--bsize', dest='bsize', default=50*1024, type=int)
+    parser.add_argument('--bsize', dest='bsize', default=1024, type=int)
 
     args = parser.parse_args()
 
@@ -65,14 +64,9 @@ def main():
     utils.load_checkpoint(args.model, di_model)
     di_model.eval()
 
-
-
-    start_time = time()
     with open(args.output, 'w') as output:
-        for i, super_batch in enumerate(read_batch_iter(args.input, args.bsize)):
+        for super_batch in tqdm(read_batch_iter(args.input, args.bsize), desc='Indexing', unit=' passages', unit_scale=args.bsize):
             process_doc_batch(di_model, super_batch, output)
-            throughput = round(i * args.bsize / (time() - start_time), 1)
-            utils.print_message(f"Processed {i * args.bsize} passages so far [rate: {throughput} passages per second]")
 
 if __name__ == "__main__":
     main()
