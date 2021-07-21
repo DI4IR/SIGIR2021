@@ -12,16 +12,58 @@ from src.model import MultiBERT
 from src.utils import print_message, save_checkpoint
 import re
 import datetime
+import tqdm
+import json
 class TrainReader:
-    def __init__(self, data_file):
-        print_message("#> Training with the triples in", data_file, "...\n\n")
-        self.reader = open(data_file, mode='r', encoding="utf-8")
+    def __init__(self, collection, triples, queries):
+        #print_message("#> Training with the triples in", data_file, "...\n\n")
+        expand_docs = [os.listdir(collection)][0]
+        self.docs = {}
+        self.queries = {}
+        print("Reading Collection files")
+        for fname in expand_docs:
+            f = open(collection + "/" + fname,'r')
+            print(collection + "/" + fname)
+            for line in tqdm.tqdm(f):
+                data = json.loads(line)
+                pid = data["id"]
+                content = data["contents"].strip()
+
+                #pid, content = line.split("\t")
+                self.docs[pid] = content.strip()
+            f.close()
+
+        print("Reading query files")
+        f = open(queries,'r')
+        for line in f:
+            qid, q = line.split("\t")
+            self.queries[qid] = q.strip()
+        print(len(self.queries), len(self.docs))
+
+        g = open(triples, 'r')
+        self.train_data = []
+        print("Creating training samples")
+        for line in tqdm.tqdm(g):
+            qid, pid1, pid2 = line.strip().split("\t")
+            if qid not in self.queries or pid1 not in self.docs or pid2 not in self.docs:
+                continue
+            else:
+                self.train_data.append([qid, pid1, pid2])
+        self.i = 0
+
+        #self.reader = open(data_file, mode='r', encoding="utf-8")
+        
 
     def get_minibatch(self, bsize):
-        return [self.reader.readline().split('\t') for _ in range(bsize)]
+        ret = []
+        for i in range(min(bsize, len(self.train_data) - self.i)):
+            qid, pid1, pid2 = self.train_data[self.i + i]
+            ret.append([self.queries[qid], self.docs[pid1], self.docs[pid2]])
+        self.i += bsize
+        return ret
 
 
-def manage_checkpoints(colbert, optimizer, batch_idx):
+def manage_checkpoints(colbert, optimizer, batch_idx, path="./"):
     if batch_idx % 2000 == 0:
         save_checkpoint("colbert-12layers-max300.dnn", 0, batch_idx, colbert, optimizer)
 
@@ -40,7 +82,7 @@ def train(args):
     optimizer.zero_grad()
     labels = torch.zeros(args.bsize, dtype=torch.long, device=DEVICE)
 
-    reader = TrainReader(args.triples)
+    reader = TrainReader(args.collections, args.triples, args.queries)
     train_loss = 0.0
 
     for batch_idx in range(args.maxsteps):
@@ -52,7 +94,7 @@ def train(args):
             B = Batch[B_idx * size: (B_idx+1) * size]
             Q, D1, D2 = zip(*B)
 
-            colbert_out, _ = colbert(Q + Q, D1 + D2)
+            colbert_out, _ = colbert(Q + Q, D1 + D2) #[Q1, Q2, ..., Qn, Q1, Q2, ..., Qn], [D1_1, ..., D1_1, D2_1, ..., D2_n]
             colbert_out= colbert_out.squeeze(1)
 
             colbert_out1, colbert_out2 = colbert_out[:len(Q)], colbert_out[len(Q):]
@@ -75,4 +117,4 @@ def train(args):
 
         print_message(batch_idx, train_loss / (batch_idx+1))
 
-        manage_checkpoints(colbert, optimizer, batch_idx+1)
+        manage_checkpoints(colbert, optimizer, batch_idx+1, args.output_dir)

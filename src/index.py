@@ -11,6 +11,8 @@ from math import ceil
 from src.model_multibert import *
 from multiprocessing import Pool
 from src.evaluation.loaders import load_checkpoint
+import json
+import os
 
 MB_SIZE = 1024
 
@@ -72,7 +74,8 @@ if __name__ == "__main__":
     #parser.add_argument('--similarity', dest='similarity', default='cosine', choices=['cosine', 'l2'])
 
     parser.add_argument('--collection', default="./baseline_test", type=str)
-    parser.add_argument('--output_name', default="/index-July13%d.txt", type=str)
+    parser.add_argument('--output_name', default="/index-July16.txt", type=str)
+    parser.add_argument('--batch_size', default=32, type=int)
     #parser.add_argument('--query_path', default="./collection-dT5-newterms_unique.tsv", type=str)
     parser.add_argument('--query_path', type=str)
     parser.add_argument('--ckpt', default='./colbert-12layers-max300-32000.dnn',type=str)
@@ -91,24 +94,22 @@ if __name__ == "__main__":
     p = Pool(16)
     start_time = time()
     #COLLECTION = "./baseline_test"
-    g = open(args.collection + args.output_name % 0, 'w')
+    g = open(args.collection + "/" + args.output_name + "_0", 'w')
     #f = open(args.query_path)
     text_id = 0
 
     import os
     import sys
 
-    expand_docs = [os.listdir(args.query_path)][:1]
+    expand_docs = [os.listdir(args.query_path)][0]
 
     for fname in expand_docs:
-        f = open(fname, 'r')
+        f = open(args.query_path + "/" + fname, 'r')
         for idx, passage in enumerate(f):
-            if idx > 100:
-                break
             data = json.loads(passage)
             id_ = data["id"]
             contents = data["contents"]
-            if idx % (50*1024) == 0:
+            if idx % (args.batch_size) == 0:
                 if idx > 0:
                     process_batch(g, super_batch)
                 throughput = round(idx / (time() - start_time), 1)
@@ -117,9 +118,8 @@ if __name__ == "__main__":
             if idx % 100001 == 0:
                 g.close()
                 text_id += 1
-                g = open(args.collection + args.output_name % text_id, "w")
+                g = open(args.collection + "/" +  args.output_name + "_" + str(text_id), "w")
 
-            super_batch.append(contents.strip())
-            assert int(pid) == idx
+            super_batch.append(" ".join(contents.strip().split()[:180]))
         process_batch(g, super_batch)
 

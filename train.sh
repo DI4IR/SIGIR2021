@@ -1,9 +1,11 @@
 python -m src.train \
-    --triples ./triples.train.small.tsv \
-    --maxsteps 100000 \
-    --bsize 32 \
+    --collection /data/y247xie/00_data/MSMARCO/msmarco-passage-expanded/ \
+    --triples /data/y247xie/00_data/MSMARCO/qidpidtriples.train.full.2.tsv \
+    --queries /data/y247xie/00_data/MSMARCO/queries.train.tsv \
+    --maxsteps 150000 \
+    --bsize 16 \
     --accum 2 \
-    --output_dir output.train/ \
+    --output_dir output.train_expand_retokenize/ \
     --similarity cosine \
     --dim 128 \
     --query_maxlen 32 \

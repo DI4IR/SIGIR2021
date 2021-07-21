@@ -20,6 +20,8 @@ def main():
     parser.add_argument('--accum', dest='accumsteps', default=2, type=int)
 
     parser.add_argument('--triples', dest='triples', default='triples.train.small.tsv')
+    parser.add_argument('--collections', default="msmarco-passage-expanded/")
+    parser.add_argument('--queries', default='queries.train.tsv')
     parser.add_argument('--output_dir', dest='output_dir', default='outputs.train/')
 
     parser.add_argument('--similarity', dest='similarity', default='cosine', choices=['cosine', 'l2'])

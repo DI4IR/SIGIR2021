@@ -70,20 +70,23 @@ class MultiBERT(BertPreTrainedModel):
 
     def tokenize(self, q, d):
         query_tokens = list(set(cleanQ(q).strip().split()))  # [:10]
-
+        q_tokens = self.tokenizer.tokenize(" ".join(query_tokens))
         content = cleanD(d).strip()
-        doc_tokens = content.split()
+        #doc_tokens = content.split()
+        doc_tokens = self.tokenizer.tokenize(content)
 
         # NOTE: The following line accounts for CLS!
-        tokenized = self.tokenizer.tokenize(content)
-        word_indexes = list(accumulate([-1] + tokenized, lambda a, b: a + int(not b.startswith('##'))))
-        match_indexes = list(set([doc_tokens.index(t) for t in query_tokens if t in doc_tokens]))
+        #tokenized = self.tokenizer.tokenize(content)
+        #word_indexes = list(accumulate([-1] + tokenized, lambda a, b: a + int(not b.startswith('##'))))
+        word_indexes = [-1] + list(range(len(doc_tokens)))
+        #match_indexes = list(set([doc_tokens.index(t) for t in query_tokens if t in doc_tokens]))
+        match_indexes = list(set([doc_tokens.index(t) for t in q_tokens if t in doc_tokens]))
         term_indexes = [word_indexes.index(idx) for idx in match_indexes]
 
         a = [idx for i, idx in enumerate(match_indexes) if term_indexes[i] < MAX_LENGTH]
         b = [idx for idx in term_indexes if idx < MAX_LENGTH]
 
-        return content, tokenized, a, b, len(word_indexes) + 2
+        return " ".join(doc_tokens), doc_tokens, a, b, len(word_indexes) + 2
 
     def forward(self, Q, D):
         bsize = len(Q)
