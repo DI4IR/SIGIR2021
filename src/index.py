@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 
 from time import time
 from math import ceil
-from src.model_multibert import *
+from src.model import *
 from multiprocessing import Pool
 from src.evaluation.loaders import load_checkpoint
 
@@ -17,6 +17,13 @@ MB_SIZE = 1024
 def print_message(*s):
     s = ' '.join(map(str, s))
     print("[{}] {}".format(datetime.datetime.utcnow().strftime("%b %d, %H:%M:%S"), s), flush=True)
+
+
+print_message("#> Loading model checkpoint.")
+net = MultiBERT.from_pretrained('bert-base-uncased')
+net = net.to(DEVICE)
+load_checkpoint("/scratch/am8949/MultiBERT/colbert-12layers-100000.dnn", net)
+net.eval()
 
 
 def tok(d):
@@ -102,6 +109,7 @@ if __name__ == "__main__":
 
     for fname in expand_docs:
         f = open(fname, 'r')
+
         for idx, passage in enumerate(f):
             if idx > 100:
                 break
@@ -121,5 +129,11 @@ if __name__ == "__main__":
 
             super_batch.append(contents.strip())
             assert int(pid) == idx
+            passage = passage.strip()
+            pid, passage = passage.split('\t')
+            super_batch.append(passage)
+
+            #assert int(pid) == idx
+
         process_batch(g, super_batch)
 
