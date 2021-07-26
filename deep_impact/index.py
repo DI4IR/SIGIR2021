@@ -20,6 +20,10 @@ def read_batch_iter(data_file, bsize):
                 yield batch
                 batch = []
 
+        if batch:
+            yield batch
+
+
 
 def process_doc_batch(di_model, super_batch, output):
 
@@ -33,7 +37,7 @@ def process_doc_batch(di_model, super_batch, output):
 
             lines = []
             for pid, t_s in zip(pids, term_scores):
-                line = pid + '\t' + '\t'.join([f"{t}:{s}" for t, s in t_s.items()])
+                line = pid + '\t' + '\t'.join([f"{t}:{s:.3f}" for t, s in t_s.items()])
                 lines.append(line)
 
             output.write('\n'.join(lines) + "\n")
