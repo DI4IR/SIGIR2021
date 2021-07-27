@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 
 from time import time
 from math import ceil
-from src.model_multibert import *
+from src.model import *
 from multiprocessing import Pool
 from src.evaluation.loaders import load_checkpoint
 import json
