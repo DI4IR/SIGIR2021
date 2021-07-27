@@ -55,8 +55,6 @@ def process_batch(g, super_batch):
         for batch_idx in range(ceil(len(super_batch) / MB_SIZE)):
             D = super_batch[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
             IDXs = super_batch_indices[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
-            IDXs = list(range(batch_idx * MB_SIZE, (batch_idx + 1) * MB_SIZE))
-            # inference with net
             all_term_scores = net.index(D, len(D[-1][0])+2)
             every_term_score += zip(IDXs, all_term_scores)
 
