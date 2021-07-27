@@ -15,8 +15,11 @@ import datetime
 import tqdm
 import json
 class TrainReader:
-    def __init__(self, collection, triples, queries):
-        #print_message("#> Training with the triples in", data_file, "...\n\n")
+    def __init__(self, data_file):
+        print_message("#> Training with the triples in", data_file, "...\n\n")
+        self.reader = open(data_file, mode='r', encoding="utf-8")
+
+    def init(self, collection, triples, queries):
         expand_docs = [os.listdir(collection)][0]
         self.docs = {}
         self.queries = {}
@@ -52,6 +55,8 @@ class TrainReader:
         self.i = 0
 
     def get_minibatch(self, bsize):
+        return [self.reader.readline().split('\t') for _ in range(bsize)]
+    def get_minibatch_new(self, bsize):
         ret = []
         for i in range(min(bsize, len(self.train_data) - self.i)):
             qid, pid1, pid2 = self.train_data[self.i + i]
@@ -79,7 +84,8 @@ def train(args):
     optimizer.zero_grad()
     labels = torch.zeros(args.bsize, dtype=torch.long, device=DEVICE)
 
-    reader = TrainReader(args.collections, args.triples, args.queries)
+    #reader = TrainReader(args.collections, args.triples, args.queries)
+    reader = TrainReader(args.triples)
     train_loss = 0.0
 
     for batch_idx in range(args.maxsteps):

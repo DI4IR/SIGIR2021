@@ -73,7 +73,7 @@ class MultiBERT(BertPreTrainedModel):
         offset = 0
         pairs, X = [], []
 
-        for tokenized_content, terms, content in D:
+        for tokenized_content, terms in D:
             terms = [(t, idx, offset + pos) for pos, (t, idx) in enumerate(terms)]
             offset += len(terms)
             pairs.append(self.convert_example(tokenized_content, max_seq_length))
@@ -86,8 +86,6 @@ class MultiBERT(BertPreTrainedModel):
         outputs = self.bert.forward(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
 
         hidden_state = outputs[0]
-        print(hidden_state.size())
-        print(X[0])
 
         pooled_output = torch.cat([hidden_state[i, list(map(lambda x: x[1], X[i]))] for i in range(bsize)])
         pooled_output = self.pre_classifier(pooled_output)
