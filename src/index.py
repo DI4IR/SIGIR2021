@@ -31,7 +31,7 @@ def tok(d, max_seq_len=512):
     terms = [(t, word_indexes.index(idx)) for t, idx in terms]
     terms = [(t, idx) for (t, idx) in terms if idx < MAX_LENGTH]
 
-    return tokenized_content, terms, d
+    return tokenized_content, terms
 
 def quantize(value, scale):
     return int(ceil(value * scale))
@@ -64,7 +64,7 @@ def process_batch(g, super_batch):
         for idx, term_scores in enumerate(every_term_score):
             data = {
                     "id":idx,
-                    "contents": contents[idx],
+                    "contents": "",
                     "vector":{}
                     }
             for t, s in term_scores:
