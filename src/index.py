@@ -38,7 +38,7 @@ def quantize(value, scale):
 
 def process_batch(g, super_batch):
     print_message("Start process_batch()", "")
-    scale = (1 << 8) / 20.0
+    scale = (1 << 8) / 21.0
 
     with torch.no_grad():
         super_batch = list(p.map(tok, super_batch))
