@@ -26,12 +26,10 @@ def tok(d, max_seq_len=512):
     content = ' '.join(d)
     tokenized_content = net.tokenizer.tokenize(content)[:max_seq_len]
 
-    #terms = list(set([(t, d.index(t)) for t in d]))  # Quadratic!
-    terms = list(set([(t, tokenized_content.index(t)) for t in tokenized_content]))
-    #word_indexes = list(accumulate([-1] + tokenized_content, lambda a, b: a + int(not b.startswith('##'))))
-    word_indexes = [-1] + list(range(len(tokenized_content)))
+    terms = list(set([(t, d.index(t)) for t in d]))  # Quadratic!
+    word_indexes = list(accumulate([-1] + tokenized_content, lambda a, b: a + int(not b.startswith('##'))))
     terms = [(t, word_indexes.index(idx)) for t, idx in terms]
-    #terms = [(t, idx) for (t, idx) in terms if idx < MAX_LENGTH]
+    terms = [(t, idx) for (t, idx) in terms if idx < MAX_LENGTH]
 
     return tokenized_content, terms, d
 
@@ -45,9 +43,9 @@ def process_batch(g, super_batch):
     with torch.no_grad():
         super_batch = list(p.map(tok, super_batch))
 
-        #sorted_super_batch = sorted([(v, idx) for idx, v in enumerate(super_batch)], key=lambda x: len(x[0][0]))
-        #super_batch = [v for v, _ in sorted_super_batch]
-        #super_batch_indices = [idx for _, idx in sorted_super_batch]
+        sorted_super_batch = sorted([(v, idx) for idx, v in enumerate(super_batch)], key=lambda x: len(x[0][0]))
+        super_batch = [v for v, _ in sorted_super_batch]
+        super_batch_indices = [idx for _, idx in sorted_super_batch]
 
         print_message("Done sorting", "")
 
@@ -56,19 +54,16 @@ def process_batch(g, super_batch):
 
         for batch_idx in range(ceil(len(super_batch) / MB_SIZE)):
             D = super_batch[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
-            contents += [x[2] for x in D]
-            #IDXs = super_batch_indices[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
-            #IDXs = list(range(batch_idx * MB_SIZE, (batch_idx + 1) * MB_SIZE))
+            IDXs = super_batch_indices[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
+            IDXs = list(range(batch_idx * MB_SIZE, (batch_idx + 1) * MB_SIZE))
             # inference with net
             all_term_scores = net.index(D, len(D[-1][0])+2)
-            #every_term_score += zip(IDXs, all_term_scores)
-            every_term_score += all_term_scores
+            every_term_score += zip(IDXs, all_term_scores)
 
-        #every_term_score = sorted(every_term_score)
+        every_term_score = sorted(every_term_score)
 
         lines = []
         for idx, term_scores in enumerate(every_term_score):
-            #term_scores = ', '.join([term + ": " + str(round(score, 3)) for term, score in term_scores])
             data = {
                     "id":idx,
                     "contents": contents[idx],
@@ -76,24 +71,16 @@ def process_batch(g, super_batch):
                     }
             for t, s in term_scores:
                 data["vector"][t] = quantize(s, scale)
-            #lines.append(term_scores)
             g.write(json.dumps(data) + "\n")
 
-    #g.write('\n'.join(lines) + "\n")
     g.flush()
 
 if __name__ == "__main__":
     parser = ArgumentParser(description='Eval ColBERT with <query, positive passage, negative passage> triples.')
     
-    #parser.add_argument('--bsize', dest='bsize', default=32, type=int)
-    #parser.add_argument('--triples', dest='triples', default='triples.train.small.tsv')
-    #parser.add_argument('--output_dir', dest='output_dir', default='outputs.train/')
-    #parser.add_argument('--similarity', dest='similarity', default='cosine', choices=['cosine', 'l2'])
-
     parser.add_argument('--collection', default="./baseline_test", type=str)
     parser.add_argument('--output_name', default="/index-July16.txt", type=str)
     parser.add_argument('--batch_size', default=32, type=int)
-    #parser.add_argument('--query_path', default="./collection-dT5-newterms_unique.tsv", type=str)
     parser.add_argument('--query_path', type=str)
     parser.add_argument('--ckpt', default='./colbert-12layers-max300-32000.dnn',type=str)
 

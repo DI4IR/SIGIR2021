@@ -51,9 +51,6 @@ class TrainReader:
                 self.train_data.append([qid, pid1, pid2])
         self.i = 0
 
-        #self.reader = open(data_file, mode='r', encoding="utf-8")
-        
-
     def get_minibatch(self, bsize):
         ret = []
         for i in range(min(bsize, len(self.train_data) - self.i)):
