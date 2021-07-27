@@ -73,7 +73,7 @@ class MultiBERT(BertPreTrainedModel):
         q_tokens = self.tokenizer.tokenize(" ".join(query_tokens))
         content = cleanD(d).strip()
         #doc_tokens = content.split()
-        doc_tokens = self.tokenizer.tokenize(content)
+        doc_tokens = self.tokenizer.tokenize(content)[:512] # truncate to seq len
 
         # NOTE: The following line accounts for CLS!
         #tokenized = self.tokenizer.tokenize(content)

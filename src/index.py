@@ -21,48 +21,65 @@ def print_message(*s):
     print("[{}] {}".format(datetime.datetime.utcnow().strftime("%b %d, %H:%M:%S"), s), flush=True)
 
 
-def tok(d):
+def tok(d, max_seq_len=512):
     d = cleanD(d, join=False)
     content = ' '.join(d)
-    tokenized_content = net.tokenizer.tokenize(content)
+    tokenized_content = net.tokenizer.tokenize(content)[:max_seq_len]
 
-    terms = list(set([(t, d.index(t)) for t in d]))  # Quadratic!
-    word_indexes = list(accumulate([-1] + tokenized_content, lambda a, b: a + int(not b.startswith('##'))))
+    #terms = list(set([(t, d.index(t)) for t in d]))  # Quadratic!
+    terms = list(set([(t, tokenized_content.index(t)) for t in tokenized_content]))
+    #word_indexes = list(accumulate([-1] + tokenized_content, lambda a, b: a + int(not b.startswith('##'))))
+    word_indexes = [-1] + list(range(len(tokenized_content)))
     terms = [(t, word_indexes.index(idx)) for t, idx in terms]
-    terms = [(t, idx) for (t, idx) in terms if idx < MAX_LENGTH]
+    #terms = [(t, idx) for (t, idx) in terms if idx < MAX_LENGTH]
 
-    return tokenized_content, terms
+    return tokenized_content, terms, d
 
-
+def quantize(value, scale):
+    return int(ceil(value * scale))
 
 def process_batch(g, super_batch):
     print_message("Start process_batch()", "")
+    scale = (1 << 8) / 20.0
 
     with torch.no_grad():
         super_batch = list(p.map(tok, super_batch))
 
-        sorted_super_batch = sorted([(v, idx) for idx, v in enumerate(super_batch)], key=lambda x: len(x[0][0]))
-        super_batch = [v for v, _ in sorted_super_batch]
-        super_batch_indices = [idx for _, idx in sorted_super_batch]
+        #sorted_super_batch = sorted([(v, idx) for idx, v in enumerate(super_batch)], key=lambda x: len(x[0][0]))
+        #super_batch = [v for v, _ in sorted_super_batch]
+        #super_batch_indices = [idx for _, idx in sorted_super_batch]
 
         print_message("Done sorting", "")
 
         every_term_score = []
+        contents = []
 
         for batch_idx in range(ceil(len(super_batch) / MB_SIZE)):
             D = super_batch[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
-            IDXs = super_batch_indices[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
+            contents += [x[2] for x in D]
+            #IDXs = super_batch_indices[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
+            #IDXs = list(range(batch_idx * MB_SIZE, (batch_idx + 1) * MB_SIZE))
+            # inference with net
             all_term_scores = net.index(D, len(D[-1][0])+2)
-            every_term_score += zip(IDXs, all_term_scores)
+            #every_term_score += zip(IDXs, all_term_scores)
+            every_term_score += all_term_scores
 
-        every_term_score = sorted(every_term_score)
+        #every_term_score = sorted(every_term_score)
 
         lines = []
-        for _, term_scores in every_term_score:
-            term_scores = ', '.join([term + ": " + str(round(score, 3)) for term, score in term_scores])
-            lines.append(term_scores)
+        for idx, term_scores in enumerate(every_term_score):
+            #term_scores = ', '.join([term + ": " + str(round(score, 3)) for term, score in term_scores])
+            data = {
+                    "id":idx,
+                    "contents": contents[idx],
+                    "vector":{}
+                    }
+            for t, s in term_scores:
+                data["vector"][t] = quantize(s, scale)
+            #lines.append(term_scores)
+            g.write(json.dumps(data) + "\n")
 
-    g.write('\n'.join(lines) + "\n")
+    #g.write('\n'.join(lines) + "\n")
     g.flush()
 
 if __name__ == "__main__":
@@ -115,11 +132,11 @@ if __name__ == "__main__":
                 throughput = round(idx / (time() - start_time), 1)
                 print_message("Processed", str(idx), "passages so far [rate:", str(throughput), "passages per second]")
                 super_batch = []
-            if idx % 100001 == 0:
+            if idx % 1000000 == 999999:
                 g.close()
                 text_id += 1
                 g = open(args.collection + "/" +  args.output_name + "_" + str(text_id), "w")
 
-            super_batch.append(" ".join(contents.strip().split()[:180]))
+            super_batch.append(contents)
         process_batch(g, super_batch)
 

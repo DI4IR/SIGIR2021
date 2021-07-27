@@ -65,10 +65,10 @@ class TrainReader:
 
 def manage_checkpoints(colbert, optimizer, batch_idx, path="./"):
     if batch_idx % 2000 == 0:
-        save_checkpoint("colbert-12layers-max300.dnn", 0, batch_idx, colbert, optimizer)
+        save_checkpoint(path + "colbert-12layers-max300.dnn", 0, batch_idx, colbert, optimizer)
 
     if batch_idx in SAVED_CHECKPOINTS:
-        save_checkpoint("colbert-12layers-max300-" + str(batch_idx) + ".dnn", 0, batch_idx, colbert, optimizer)
+        save_checkpoint(path + "colbert-12layers-max300-" + str(batch_idx) + ".dnn", 0, batch_idx, colbert, optimizer)
 
 
 def train(args):
