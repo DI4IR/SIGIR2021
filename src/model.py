@@ -134,12 +134,14 @@ class MultiBERT(BertPreTrainedModel):
         bsize = len(D)
         offset = 0
         pairs, X = [], []
+        conts = []
 
-        for tokenized_content, terms in D:
+        for tokenized_content, terms, cont in D:
             terms = [(t, idx, offset + pos) for pos, (t, idx) in enumerate(terms)]
             offset += len(terms)
             pairs.append(self.convert_example(tokenized_content, max_seq_length))
             X.append(terms)
+            conts.append(cont)
 
         input_ids = torch.tensor([f['input_ids'] for f in pairs], dtype=torch.long).to(DEVICE)
         attention_mask = torch.tensor([f['attention_mask'] for f in pairs], dtype=torch.long).to(DEVICE)
@@ -154,5 +156,5 @@ class MultiBERT(BertPreTrainedModel):
         y_score = y_score.squeeze().cpu().numpy().tolist()
         term_scores = [[(term, y_score[pos]) for term, _, pos in terms] for terms in X]
 
-        return term_scores
+        return term_scores,conts
 

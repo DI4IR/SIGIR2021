@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import json
 
 from time import time
 from math import ceil
@@ -21,15 +22,12 @@ def print_message(*s):
 print_message("#> Loading model checkpoint.")
 net = MultiBERT.from_pretrained('bert-base-uncased')
 net = net.to(DEVICE)
-load_checkpoint("/scratch/am8949/MultiBERT/colbert-12layers-100000.dnn", net)
+load_checkpoint("../../DeepImpact/official/colbert-12layers-100000.dnn", net)
 net.eval()
 
 
-
-
-
-
 def tok(d):
+    cont = d
     d = cleanD(d, join=False)
     content = ' '.join(d)
     tokenized_content = net.tokenizer.tokenize(content)
@@ -39,15 +37,21 @@ def tok(d):
     terms = [(t, word_indexes.index(idx)) for t, idx in terms]
     terms = [(t, idx) for (t, idx) in terms if idx < MAX_LENGTH]
 
-    return tokenized_content, terms
+    return tokenized_content, terms, cont
 
+def quantize(value, scale):
+    return int(ceil(value * scale))
 
 
 def process_batch(g, super_batch):
     print_message("Start process_batch()", "")
+    scale = (1 << 8) / 21.0
 
     with torch.no_grad():
+        if not len(super_batch):
+            return None
         super_batch = list(p.map(tok, super_batch))
+        #super_batch = [tok(x) for x in super_batch]
 
         sorted_super_batch = sorted([(v, idx) for idx, v in enumerate(super_batch)], key=lambda x: len(x[0][0]))
         super_batch = [v for v, _ in sorted_super_batch]
@@ -56,43 +60,65 @@ def process_batch(g, super_batch):
         print_message("Done sorting", "")
 
         every_term_score = []
+        contents = []
 
         for batch_idx in range(ceil(len(super_batch) / MB_SIZE)):
             D = super_batch[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
             IDXs = super_batch_indices[batch_idx * MB_SIZE: (batch_idx + 1) * MB_SIZE]
-            all_term_scores = net.index(D, len(D[-1][0])+2)
+            all_term_scores,cont  = net.index(D, len(D[-1][0])+2)
             every_term_score += zip(IDXs, all_term_scores)
+            contents += zip(IDXs, cont)
 
         every_term_score = sorted(every_term_score)
+        contents = sorted(contents)
 
         lines = []
-        for _, term_scores in every_term_score:
-            term_scores = ', '.join([term + ": " + str(round(score, 3)) for term, score in term_scores])
-            lines.append(term_scores)
+        #for _, term_scores in every_term_score:
+        #    term_scores = ', '.join([term + ": " + str(int(quantize(score, scale))) for term, score in term_scores])
+        #    lines.append(term_scores)
+        for idx, term_scores in enumerate(every_term_score):
+            _, ts = term_scores
+            data = {
+                    "id":idx,
+                    "contents": contents[idx][1],
+                    "vector":{}
+                    }
+            for t, s in ts:
+                data["vector"][t] = quantize(s, scale)
+            g.write(json.dumps(data) + "\n")
 
-    g.write('\n'.join(lines) + "\n")
     g.flush()
 
 
 p = Pool(16)
 start_time = time()
 
-COLLECTION = "/scratch/am8949"
-with open(COLLECTION + '/queries.dev.test.txt', 'w') as g:
-    with open(COLLECTION + '/queries.dev.small.tsv') as f:
-        for idx, passage in enumerate(f):
-            if idx % (50*1024) == 0:
-                if idx > 0:
-                    process_batch(g, super_batch)
-                throughput = round(idx / (time() - start_time), 1)
-                print_message("Processed", str(idx), "passages so far [rate:", str(throughput), "passages per second]")
-                super_batch = []
+#COLLECTION = "/scratch/am8949"
+COLLECTION = "/data/y247xie/00_data/MSMARCO/"
+#with open(COLLECTION + '/queries.dev.test.txt', 'w') as g:
+#    with open(COLLECTION + '/queries.dev.small.tsv') as f:
+f = open(COLLECTION + '/collection.tsv','r')
+i = 0
+g = open(COLLECTION + '/collections/doc{}.json'.format(i),'w')
+for idx, passage in enumerate(f):
+    if idx % (64) == 0:
+        if idx > 0:
+            process_batch(g, super_batch)
+        throughput = round(idx / (time() - start_time), 1)
+        print_message("Processed", str(idx), "passages so far [rate:", str(throughput), "passages per second]")
+        super_batch = []
 
-            passage = passage.strip()
-            pid, passage = passage.split('\t')
-            super_batch.append(passage)
+    passage = passage.strip()
+    pid, passage = passage.split('\t')
+    super_batch.append(passage)
+    if idx % 1000000 == 999999:
+        g.close()
+        i += 1
+        g = open(COLLECTION + '/collections/doc{}.json'.format(i),'w')
 
             #assert int(pid) == idx
 
-        process_batch(g, super_batch)
+process_batch(g, super_batch)
+g.close()
+f.close()
 
