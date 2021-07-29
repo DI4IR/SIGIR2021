@@ -98,8 +98,9 @@ if __name__ == "__main__":
     #parser.add_argument('--output_dir', dest='output_dir', default='outputs.train/')
     #parser.add_argument('--similarity', dest='similarity', default='cosine', choices=['cosine', 'l2'])
 
-    parser.add_argument('--collection', default="./baseline_test", type=str)
-    parser.add_argument('--output_name', default="/index-July13%d.txt", type=str)
+    parser.add_argument('--collection', default="./baseline_test", type=str)# collection file: tsv, docid \t doc
+    parser.add_argument('--output_path', default="./collections/", type=str)
+    #parser.add_argument('--output_name', default="/index-July13%d.txt", type=str)
     #parser.add_argument('--query_path', default="./collection-dT5-newterms_unique.tsv", type=str)
     parser.add_argument('--query_path', type=str)
     parser.add_argument('--ckpt', default='./colbert-12layers-max300-32000.dnn',type=str)
@@ -118,67 +119,36 @@ if __name__ == "__main__":
     p = Pool(16)
     start_time = time()
     #COLLECTION = "./baseline_test"
-    g = open(args.collection + args.output_name % 0, 'w')
+    g = open(args.output_path+ "doc0.json", 'w')
     #f = open(args.query_path)
     text_id = 0
+    #expand_docs = [os.listdir(args.query_path)][:1]
 
-    import os
-    import sys
 
-    expand_docs = [os.listdir(args.query_path)][:1]
+    #for fname in expand_docs:
+    #    f = open(fname, 'r')
+    with open(args.collection, 'r') as f:
 
-    for fname in expand_docs:
-        f = open(fname, 'r')
-
-#<<<<<<< HEAD
-##COLLECTION = "/scratch/am8949"
-#COLLECTION = "/data/y247xie/00_data/MSMARCO/"
-##with open(COLLECTION + '/queries.dev.test.txt', 'w') as g:
-##    with open(COLLECTION + '/queries.dev.small.tsv') as f:
-#f = open(COLLECTION + '/collection.tsv','r')
-#i = 0
-#g = open(COLLECTION + '/collections/doc{}.json'.format(i),'w')
-#for idx, passage in enumerate(f):
-#    if idx % (64) == 0:
-#        if idx > 0:
-#            process_batch(g, super_batch)
-#        throughput = round(idx / (time() - start_time), 1)
-#        print_message("Processed", str(idx), "passages so far [rate:", str(throughput), "passages per second]")
-#        super_batch = []
-
-#    passage = passage.strip()
-#    pid, passage = passage.split('\t')
-#    super_batch.append(passage)
-#    if idx % 1000000 == 999999:
-#        g.close()
-#        i += 1
-#        g = open(COLLECTION + '/collections/doc{}.json'.format(i),'w')
-#=======
         for idx, passage in enumerate(f):
-            if idx > 100:
-                break
-            data = json.loads(passage)
-            id_ = data["id"]
-            contents = data["contents"]
+            #data = json.loads(passage)
+            #id_ = data["id"]
+            #contents = data["contents"]
+
             if idx % (50*1024) == 0:
                 if idx > 0:
                     process_batch(g, super_batch)
                 throughput = round(idx / (time() - start_time), 1)
                 print_message("Processed", str(idx), "passages so far [rate:", str(throughput), "passages per second]")
                 super_batch = []
-            if idx % 100001 == 0:
-                g.close()
-                text_id += 1
-                g = open(args.collection + args.output_name % text_id, "w")
 
-            super_batch.append(contents.strip())
-            assert int(pid) == idx
             passage = passage.strip()
             pid, passage = passage.split('\t')
             super_batch.append(passage)
-#>>>>>>> 7998c461ab13dfbeaaa9c96a8b886c926662e39a
 
-            #assert int(pid) == idx
+            if idx % 1000000 == 999999:
+                g.close()
+                text_id += 1
+                g = open(args.output_path + "/doc{}.json",format(text_id), "w")
 
 process_batch(g, super_batch)
 g.close()
