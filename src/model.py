@@ -47,12 +47,29 @@ class MultiBERT(BertPreTrainedModel):
         tokenized = self.tokenizer.tokenize(content)
         word_indexes = list(accumulate([-1] + tokenized, lambda a, b: a + int(not b.startswith('##'))))
         match_indexes = list(set([doc_tokens.index(t) for t in query_tokens if t in doc_tokens]))
+        match_queries = list(set([query_tokens.index(t) for t in query_tokens if (t in doc_tokens and word_indexes.index(doc_tokens.index(t)) < MAX_LENGTH)]))
         term_indexes = [word_indexes.index(idx) for idx in match_indexes]
 
         a = [idx for i, idx in enumerate(match_indexes) if term_indexes[i] < MAX_LENGTH]
         b = [idx for idx in term_indexes if idx < MAX_LENGTH]
 
-        return content, tokenized, a, b, len(word_indexes) + 2
+        return content, tokenized, a, b, len(word_indexes) + 2, match_queries
+
+    def tok(self, D):
+        T = []
+        for d in D:
+            content = cleanD(d).strip()
+            doc_tokens = content.split()
+            tokenized_content = self.tokenizer.tokenize(content)
+
+            terms = list(set([(t, doc_tokens.index(t)) for t in doc_tokens]))  # Quadratic!
+            word_indexes = list(accumulate([-1] + tokenized_content, lambda a, b: a + int(not b.startswith('##'))))
+            terms = [(t, word_indexes.index(idx)) for t, idx in terms]
+            terms = [(t, idx) for (t, idx) in terms if idx < MAX_LENGTH]
+        
+            T.append((tokenized_content, terms))
+        return T
+
 
     def forward(self, Q, D):
         bsize = len(Q)
@@ -62,9 +79,9 @@ class MultiBERT(BertPreTrainedModel):
 
         doc_partials = []
         pre_pairs = []
-
+        Y = []
         for q, d in zip(Q, D):
-            tokens, tokenized, term_idxs, token_idxs, seq_length = self.tokenize(q, d)
+            tokens, tokenized, term_idxs, token_idxs, seq_length, match_queries = self.tokenize(q, d)
             max_seq_length = max(max_seq_length, seq_length)
 
             pfx_sumX.append(total_sizeX)
@@ -77,7 +94,7 @@ class MultiBERT(BertPreTrainedModel):
             pfx_sum.append(total_size)
 
             pre_pairs.append((tokenized, token_idxs))
-
+            Y.append(match_queries)
         if max_seq_length % 10 == 0:
             print("#>>>   max_seq_length = ", max_seq_length)
 
@@ -90,9 +107,7 @@ class MultiBERT(BertPreTrainedModel):
         token_type_ids = torch.tensor([f['token_type_ids'] for f in pairs], dtype=torch.long).to(DEVICE)
 
         outputs = self.bert.forward(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
-
         hidden_state = outputs[0]
-
         def one(i):
             if len(X[i]) > 0:
                 l = [hidden_state[i, j] for j in X[i]]  # + [mismatch_scores[i, j] for j in all_mismatches[i]]
@@ -114,10 +129,13 @@ class MultiBERT(BertPreTrainedModel):
 
         y_score = self.impact_score_encoder(pooled_output)
 
+        q_score = self.index(self.tok(Q), max_seq_length, Y)
+            
+        y_score = y_score * q_score
+
         x = torch.arange(bsize).expand(len(pfx_sum), bsize) < torch.tensor(pfx_sum).unsqueeze(1)
         y = torch.arange(bsize).expand(len(pfx_sum), bsize) >= torch.tensor([0] + pfx_sum[:-1]).unsqueeze(1)
         mask = (x & y).to(DEVICE)
-
         y_scorex = list(y_score.cpu())
         term_scores = []
         for doc in doc_partials:
@@ -127,7 +145,7 @@ class MultiBERT(BertPreTrainedModel):
 
         return (mask.type(torch.float32) @ y_score), term_scores #, ordered_terms #, num_exceeding_fifth
 
-    def index(self, D, max_seq_length):
+    def index(self, D, max_seq_length, Y):
         if max_seq_length % 10 == 0:
             print("#>>>   max_seq_length = ", max_seq_length)
 
@@ -148,11 +166,20 @@ class MultiBERT(BertPreTrainedModel):
         outputs = self.bert.forward(input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
 
         hidden_state = outputs[0]
-        pooled_output = torch.cat([hidden_state[i, list(map(lambda x: x[1], X[i]))] for i in range(bsize)])
+
+
+        def one(i):
+            if len(Y[i]) > 0:
+                l = [hidden_state[i, j] for j in Y[i]]  # + [mismatch_scores[i, j] for j in all_mismatches[i]]
+                return torch.stack(l)
+            return torch.tensor([]).to(DEVICE)
+
+        pooled_output = torch.cat([one(i) for i in range(bsize)])
+
+
+#        pooled_output = torch.cat([hidden_state[i, list(map(lambda x: x[1], X[i]))] for i in range(bsize)])
 
         y_score = self.impact_score_encoder(pooled_output)
-        y_score = y_score.squeeze().cpu().numpy().tolist()
-        term_scores = [[(term, y_score[pos]) for term, _, pos in terms] for terms in X]
 
-        return term_scores
+        return y_score
 
