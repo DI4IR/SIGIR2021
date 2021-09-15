@@ -21,7 +21,7 @@ def print_message(*s):
 print_message("#> Loading model checkpoint.")
 net = MultiBERT.from_pretrained('bert-base-uncased')
 net = net.to(DEVICE)
-load_checkpoint("/scratch/am8949/MultiBERT/colbert-12layers-100000.dnn", net)
+load_checkpoint("/scratch/am8949/SIGIR2021/colbert-test.dnn", net)
 net.eval()
 
 
@@ -78,8 +78,8 @@ p = Pool(16)
 start_time = time()
 
 COLLECTION = "/scratch/am8949"
-with open(COLLECTION + '/queries.dev.test.txt', 'w') as g:
-    with open(COLLECTION + '/queries.dev.small.tsv') as f:
+with open(COLLECTION + '/index-idf2.txt', 'w') as g:
+    with open(COLLECTION + '/collection-dT5q-newterms_unique.tsv') as f:
         for idx, passage in enumerate(f):
             if idx % (50*1024) == 0:
                 if idx > 0:

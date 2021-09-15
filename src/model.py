@@ -8,9 +8,12 @@ from transformers import *
 import re
 from src.parameters import DEVICE
 from src.utils2 import cleanQ, cleanD
-
+import pickle
 MAX_LENGTH = 300
 
+f = open("/scratch/am8949/di_idf.pkl", "rb")
+
+idf_mapping = pickle.load(f)
 
 class MultiBERT(BertPreTrainedModel):
     def __init__(self, config):
@@ -113,19 +116,26 @@ class MultiBERT(BertPreTrainedModel):
             return torch.tensor([[0.0]] * len(Q)).to(DEVICE), term_scores
 
         y_score = self.impact_score_encoder(pooled_output)
-
+        idf_scores = []
+        for doc in doc_partials:
+            for (idx, term) in doc:
+                if term in idf_mapping:
+                    idf_scores.append(idf_mapping[term])
+                else:
+                    idf_scores.append(0)
+        idf_scores = torch.tensor(idf_scores, dtype=torch.float32).unsqueeze(1).to(DEVICE)
+        yy_score = idf_scores * y_score
         x = torch.arange(bsize).expand(len(pfx_sum), bsize) < torch.tensor(pfx_sum).unsqueeze(1)
         y = torch.arange(bsize).expand(len(pfx_sum), bsize) >= torch.tensor([0] + pfx_sum[:-1]).unsqueeze(1)
         mask = (x & y).to(DEVICE)
-
-        y_scorex = list(y_score.cpu())
+        y_scorex = list(yy_score.cpu())
         term_scores = []
         for doc in doc_partials:
             term_scores.append([])
             for (idx, term) in doc:
                 term_scores[-1].append((term, y_scorex[idx]))
 
-        return (mask.type(torch.float32) @ y_score), term_scores #, ordered_terms #, num_exceeding_fifth
+        return (mask.type(torch.float32) @ yy_score), term_scores #, ordered_terms #, num_exceeding_fifth
 
     def index(self, D, max_seq_length):
         if max_seq_length % 10 == 0:
@@ -134,8 +144,9 @@ class MultiBERT(BertPreTrainedModel):
         bsize = len(D)
         offset = 0
         pairs, X = [], []
-
+        T = []
         for tokenized_content, terms in D:
+            T.append(terms)
             terms = [(t, idx, offset + pos) for pos, (t, idx) in enumerate(terms)]
             offset += len(terms)
             pairs.append(self.convert_example(tokenized_content, max_seq_length))
@@ -151,6 +162,16 @@ class MultiBERT(BertPreTrainedModel):
         pooled_output = torch.cat([hidden_state[i, list(map(lambda x: x[1], X[i]))] for i in range(bsize)])
 
         y_score = self.impact_score_encoder(pooled_output)
+        idf_scores = []
+        for doc in T:
+            for term, _ in doc:
+                if term in idf_mapping:
+                    idf_scores.append(idf_mapping[term])
+                else:
+                    idf_scores.append(0)
+        idf_scores = torch.tensor(idf_scores, dtype=torch.float32).unsqueeze(1).to(DEVICE)
+        y_score = idf_scores * y_score 
+        
         y_score = y_score.squeeze().cpu().numpy().tolist()
         term_scores = [[(term, y_score[pos]) for term, _, pos in terms] for terms in X]
 
