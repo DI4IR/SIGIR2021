@@ -47,13 +47,14 @@ class MultiBERT(BertPreTrainedModel):
         tokenized = self.tokenizer.tokenize(content)
         word_indexes = list(accumulate([-1] + tokenized, lambda a, b: a + int(not b.startswith('##'))))
         match_indexes = list(set([doc_tokens.index(t) for t in query_tokens if t in doc_tokens]))
+        order_idx = list(set([doc_tokens.index(t) for t in query_tokens if (t in doc_tokens and word_indexes.index(doc_tokens.index(t)) < MAX_LENGTH)]))
         match_queries = list(set([query_tokens.index(t) for t in query_tokens if (t in doc_tokens and word_indexes.index(doc_tokens.index(t)) < MAX_LENGTH)]))
         term_indexes = [word_indexes.index(idx) for idx in match_indexes]
 
         a = [idx for i, idx in enumerate(match_indexes) if term_indexes[i] < MAX_LENGTH]
         b = [idx for idx in term_indexes if idx < MAX_LENGTH]
 
-        return content, tokenized, a, b, len(word_indexes) + 2, match_queries
+        return content, tokenized, a, b, len(word_indexes) + 2, match_queries, order_idx
 
     def tok(self, D):
         T = []
@@ -80,8 +81,10 @@ class MultiBERT(BertPreTrainedModel):
         doc_partials = []
         pre_pairs = []
         Y = []
+        ofs = 0
+        Z = []
         for q, d in zip(Q, D):
-            tokens, tokenized, term_idxs, token_idxs, seq_length, match_queries = self.tokenize(q, d)
+            tokens, tokenized, term_idxs, token_idxs, seq_length, match_queries, order_idx = self.tokenize(q, d)
             max_seq_length = max(max_seq_length, seq_length)
 
             pfx_sumX.append(total_sizeX)
@@ -95,6 +98,10 @@ class MultiBERT(BertPreTrainedModel):
 
             pre_pairs.append((tokenized, token_idxs))
             Y.append(match_queries)
+            order_idx, idxs = torch.sort(torch.tensor(order_idx, dtype=torch.float32).to(DEVICE))
+            Z += idxs + ofs
+            ofs+=len(idxs)
+
         if max_seq_length % 10 == 0:
             print("#>>>   max_seq_length = ", max_seq_length)
 
@@ -129,8 +136,10 @@ class MultiBERT(BertPreTrainedModel):
 
         y_score = self.impact_score_encoder(pooled_output)
 
-        q_score = self.index(self.tok(Q), max_seq_length, Y)
-            
+        q_score = self.index(self.tok(Q), max_seq_length, Y).squeeze()
+        
+        q_score = q_score[Z] 
+        q_score = q_score.unsqueeze(1)
         y_score = y_score * q_score
 
         x = torch.arange(bsize).expand(len(pfx_sum), bsize) < torch.tensor(pfx_sum).unsqueeze(1)
