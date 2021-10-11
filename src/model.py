@@ -9,7 +9,8 @@ import re
 from src.parameters import DEVICE
 from src.utils2 import cleanQ, cleanD
 
-MAX_LENGTH = 300
+MAX_LENGTH = 200
+
 
 
 class MultiBERT(BertPreTrainedModel):
@@ -121,9 +122,9 @@ class MultiBERT(BertPreTrainedModel):
                 return torch.stack(l)
             return torch.tensor([]).to(DEVICE)
 
-        pooled_output = torch.cat([one(i) for i in range(bsize)])
+        #pooled_output = torch.cat([one(i) for i in range(bsize)])
 
-        bsize = len(pooled_output)
+        #bsize = len(pooled_output)
 
         if bsize == 0:
             term_scores = []
@@ -132,29 +133,41 @@ class MultiBERT(BertPreTrainedModel):
                 for (idx, term) in doc:
                     term_scores[-1].append((term, 0.0))
 
-            return torch.tensor([[0.0]] * len(Q)).to(DEVICE), term_scores
+            return torch.tensor([[0.0]] * len(Q), requires_grad=True).to(DEVICE), term_scores
 
-        y_score = self.impact_score_encoder(pooled_output)
-
-        q_score = self.index(self.tok(Q), max_seq_length, Y).squeeze()
+        y_score = self.impact_score_encoder(hidden_state)
         
-        q_score = q_score[Z] 
-        q_score = q_score.unsqueeze(1)
-        y_score = y_score * q_score
+        QQQ=[]
+        for q in Q:
+            QQQ.append(self.convert_example(self.tokenizer.tokenize(q), max_seq_length))
 
-        x = torch.arange(bsize).expand(len(pfx_sum), bsize) < torch.tensor(pfx_sum).unsqueeze(1)
-        y = torch.arange(bsize).expand(len(pfx_sum), bsize) >= torch.tensor([0] + pfx_sum[:-1]).unsqueeze(1)
-        mask = (x & y).to(DEVICE)
-        y_scorex = list(y_score.cpu())
-        term_scores = []
-        for doc in doc_partials:
-            term_scores.append([])
-            for (idx, term) in doc:
-                term_scores[-1].append((term, y_scorex[idx]))
+        query_input_ids = torch.tensor([f['input_ids'] for f in QQQ], dtype=torch.long).to(DEVICE)
+        query_attention_mask = torch.tensor([f['attention_mask'] for f in QQQ], dtype=torch.long).to(DEVICE)
+        query_outputs = self.bert.forward(query_input_ids, attention_mask=query_attention_mask)
+        q_score = self.impact_score_encoder(query_outputs[0])
+        exact_match = query_input_ids.unsqueeze(2) == input_ids.unsqueeze(1)  # B * LQ * LD
+        exact_match = exact_match.float()
+        scores_no_masking = torch.bmm(q_score, y_score.permute(0,2,1))
+        tok_scores, _ = (scores_no_masking * exact_match).max(dim=2)  # B * LQ
 
-        return (mask.type(torch.float32) @ y_score), term_scores #, ordered_terms #, num_exceeding_fifth
+        
+        #q_score = q_score[Z] 
+        #q_score = q_score.unsqueeze(1)
+        #y_score = y_score * q_score
 
-    def index(self, D, max_seq_length, Y):
+        #x = torch.arange(bsize).expand(len(pfx_sum), bsize) < torch.tensor(pfx_sum).unsqueeze(1)
+        #y = torch.arange(bsize).expand(len(pfx_sum), bsize) >= torch.tensor([0] + pfx_sum[:-1]).unsqueeze(1)
+        #mask = (x & y).to(DEVICE)
+        #y_scorex = list(y_score.cpu())
+        #term_scores = []
+        #for doc in doc_partials:
+        #    term_scores.append([])
+        #    for (idx, term) in doc:
+        #        term_scores[-1].append((term, y_scorex[idx]))
+        tok_scores = (tok_scores * query_attention_mask)[:, :].sum(-1)
+        return tok_scores, [] #, ordered_terms #, num_exceeding_fifth
+
+    def index(self, D, max_seq_length):
         if max_seq_length % 10 == 0:
             print("#>>>   max_seq_length = ", max_seq_length)
 
@@ -183,12 +196,16 @@ class MultiBERT(BertPreTrainedModel):
                 return torch.stack(l)
             return torch.tensor([]).to(DEVICE)
 
-        pooled_output = torch.cat([one(i) for i in range(bsize)])
+       #pooled_output = torch.cat([one(i) for i in range(bsize)])
 
 
-#        pooled_output = torch.cat([hidden_state[i, list(map(lambda x: x[1], X[i]))] for i in range(bsize)])
+        pooled_output = torch.cat([hidden_state[i, list(map(lambda x: x[1], X[i]))] for i in range(bsize)])
 
         y_score = self.impact_score_encoder(pooled_output)
+        #y_score = self.impact_score_encoder(hidden_state)
+        #return y_score
+        y_score = y_score.squeeze().cpu().numpy().tolist()
+        term_scores = [[(term, y_score[pos]) for term, _, pos in terms] for terms in X]
 
-        return y_score
+        return term_scores
 

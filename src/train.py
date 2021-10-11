@@ -14,7 +14,7 @@ def main():
 
     parser = ArgumentParser(description='Training ColBERT with <query, positive passage, negative passage> triples.')
 
-    parser.add_argument('--lr', dest='lr', default=3e-06, type=float)
+    parser.add_argument('--lr', dest='lr', default=3e-05, type=float)
     parser.add_argument('--maxsteps', dest='maxsteps', default=400000, type=int)
     parser.add_argument('--bsize', dest='bsize', default=32, type=int)
     parser.add_argument('--accum', dest='accumsteps', default=2, type=int)

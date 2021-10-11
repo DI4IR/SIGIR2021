@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from argparse import ArgumentParser
 from transformers import AdamW
+from transformers import get_scheduler
 
 from src.parameters import DEVICE, SAVED_CHECKPOINTS
 
@@ -16,17 +17,19 @@ class TrainReader:
     def __init__(self, data_file):
         print_message("#> Training with the triples in", data_file, "...\n\n")
         self.reader = open(data_file, mode='r', encoding="utf-8")
-
+        self.length = len(open(data_file, mode='r', encoding="utf-8").readlines())
     def get_minibatch(self, bsize):
         return [self.reader.readline().split('\t') for _ in range(bsize)]
-
+    
+    def len(self):
+        return self.length
 
 def manage_checkpoints(colbert, optimizer, batch_idx):
     if batch_idx % 2000 == 0:
-        save_checkpoint("colbert-test.dnn", 0, batch_idx, colbert, optimizer)
+        save_checkpoint("colbert2-test.dnn", 0, batch_idx, colbert, optimizer)
 
     if batch_idx in SAVED_CHECKPOINTS:
-        save_checkpoint("colbert-test-" + str(batch_idx) + ".dnn", 0, batch_idx, colbert, optimizer)
+        save_checkpoint("colbert2-test-" + str(batch_idx) + ".dnn", 0, batch_idx, colbert, optimizer)
 
 
 def train(args):
@@ -34,13 +37,22 @@ def train(args):
     colbert = colbert.to(DEVICE)
     colbert.train()
 
-    criterion = nn.CrossEntropyLoss()
+    reader = TrainReader(args.triples)
+    
+    #criterion = nn.CrossEntropyLoss()
+    criterion = nn.MSELoss()
+    #criterion = nn.MarginRankingLoss()
     optimizer = AdamW(colbert.parameters(), lr=args.lr, eps=1e-8)
-
+    lr_scheduler = get_scheduler(
+        "linear",
+        optimizer=optimizer,
+        num_warmup_steps=0,
+        num_training_steps = reader.len()
+    )
+    
     optimizer.zero_grad()
     labels = torch.zeros(args.bsize, dtype=torch.long, device=DEVICE)
 
-    reader = TrainReader(args.triples)
     train_loss = 0.0
 
     for batch_idx in range(args.maxsteps):
@@ -50,18 +62,22 @@ def train(args):
         for B_idx in range(args.accumsteps):
             size = args.bsize // args.accumsteps
             B = Batch[B_idx * size: (B_idx+1) * size]
-            Q, D1, D2 = zip(*B)
+            Q, D1, D2, S1, S2 = zip(*B)
+            S1 = torch.tensor(list(map(float, S1)), dtype=torch.float32).to(DEVICE)
+            S2 = torch.tensor(list(map(float, S2)), dtype=torch.float32).to(DEVICE)
 
             colbert_out, _ = colbert(Q + Q, D1 + D2)
-            colbert_out= colbert_out.squeeze(1)
+            #print(colbert_out.shape)
+            #colbert_out= colbert_out.squeeze(1)
 
             colbert_out1, colbert_out2 = colbert_out[:len(Q)], colbert_out[len(Q):]
 
-            out = torch.stack((colbert_out1, colbert_out2), dim=-1)
+           # out = torch.stack((colbert_out1, colbert_out2), dim=-1)
+            diff = torch.sub(colbert_out1, colbert_out2)
 
             positive_score, negative_score = round(colbert_out1.mean().item(), 2), round(colbert_out2.mean().item(), 2)
             print("#>>>   ", positive_score, negative_score, '\t\t|\t\t', positive_score - negative_score)
-            loss = criterion(out, labels[:out.size(0)])
+            loss = criterion(diff  , (S1-S2)[:diff.size(0)])
             loss = loss / args.accumsteps
             loss.backward()
 
@@ -70,6 +86,7 @@ def train(args):
         torch.nn.utils.clip_grad_norm_(colbert.parameters(), 2.0)
 
         optimizer.step()
+        lr_scheduler.step()
         optimizer.zero_grad()
 
         print_message(batch_idx, train_loss / (batch_idx+1))

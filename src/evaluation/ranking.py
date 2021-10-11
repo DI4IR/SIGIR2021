@@ -11,7 +11,7 @@ def rerank(args, query, pids, passages, index=None):
     colbert = args.colbert
     #tokenized_passages = list(args.pool.map(colbert.tokenizer.tokenize, passages))
     scores = [colbert.forward([query] * len(D), D)[0].cpu() for D in batch(passages, args.bsize)]
-    scores = torch.cat(scores).squeeze(1).sort(descending=True)
+    scores = torch.cat(scores).sort(descending=True)
     ranked = scores.indices.tolist()
     ranked_scores = scores.values.tolist()
     ranked_pids = [pids[position] for position in ranked]
