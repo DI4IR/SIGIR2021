@@ -23,24 +23,25 @@ class TrainReader:
 
 def manage_checkpoints(colbert, optimizer, batch_idx):
     if batch_idx % 2000 == 0:
-        save_checkpoint("colbert-test.dnn", 0, batch_idx, colbert, optimizer)
+        save_checkpoint("colbert-hn-test.dnn", 0, batch_idx, colbert, optimizer)
 
     if batch_idx in SAVED_CHECKPOINTS:
-        save_checkpoint("colbert-test-" + str(batch_idx) + ".dnn", 0, batch_idx, colbert, optimizer)
+        save_checkpoint("colbert-hn-test-" + str(batch_idx) + ".dnn", 0, batch_idx, colbert, optimizer)
 
 
 def train(args):
     colbert = MultiBERT.from_pretrained('bert-base-uncased')
     colbert = colbert.to(DEVICE)
     colbert.train()
+    reader = TrainReader(args.triples)
 
     criterion = nn.CrossEntropyLoss()
+    #criterion = nn.MarginRankingLoss()
     optimizer = AdamW(colbert.parameters(), lr=args.lr, eps=1e-8)
 
     optimizer.zero_grad()
     labels = torch.zeros(args.bsize, dtype=torch.long, device=DEVICE)
 
-    reader = TrainReader(args.triples)
     train_loss = 0.0
 
     for batch_idx in range(args.maxsteps):
@@ -53,7 +54,8 @@ def train(args):
             Q, D1, D2 = zip(*B)
 
             colbert_out, _ = colbert(Q + Q, D1 + D2)
-            colbert_out= colbert_out.squeeze(1)
+            #print(colbert_out.shape)
+            #colbert_out= colbert_out.squeeze(1)
 
             colbert_out1, colbert_out2 = colbert_out[:len(Q)], colbert_out[len(Q):]
 
