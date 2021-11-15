@@ -163,8 +163,13 @@ class MultiBERT(BertPreTrainedModel):
         #for doc in doc_partials:
         #    term_scores.append([])
         #    for (idx, term) in doc:
-        #        term_scores[-1].append((term, y_scorex[idx]))
-        tok_scores = (tok_scores * query_attention_mask)[:, :].sum(-1)
+        #        term_scores[-1].append((term, y_scorex[idx]))i
+        
+
+        sep_pos = query_attention_mask.sum(1).unsqueeze(1) - 1  # the sep token position
+        _zeros = torch.zeros_like(sep_pos)
+        query_attention_mask.scatter_(1, sep_pos.long(), _zeros)
+        tok_scores = (tok_scores * query_attention_mask)[:,:].sum(-1)
         return tok_scores, [] #, ordered_terms #, num_exceeding_fifth
 
     def index(self, D, max_seq_length):

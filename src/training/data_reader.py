@@ -17,12 +17,9 @@ class TrainReader:
     def __init__(self, data_file):
         print_message("#> Training with the triples in", data_file, "...\n\n")
         self.reader = open(data_file, mode='r', encoding="utf-8")
-        self.length = len(open(data_file, mode='r', encoding="utf-8").readlines())
     def get_minibatch(self, bsize):
         return [self.reader.readline().split('\t') for _ in range(bsize)]
     
-    def len(self):
-        return self.length
 
 def manage_checkpoints(colbert, optimizer, batch_idx):
     if batch_idx % 2000 == 0:
@@ -43,12 +40,6 @@ def train(args):
     criterion = nn.MSELoss()
     #criterion = nn.MarginRankingLoss()
     optimizer = AdamW(colbert.parameters(), lr=args.lr, eps=1e-8)
-    lr_scheduler = get_scheduler(
-        "linear",
-        optimizer=optimizer,
-        num_warmup_steps=0,
-        num_training_steps = reader.len()
-    )
     
     optimizer.zero_grad()
     labels = torch.zeros(args.bsize, dtype=torch.long, device=DEVICE)
@@ -86,7 +77,6 @@ def train(args):
         torch.nn.utils.clip_grad_norm_(colbert.parameters(), 2.0)
 
         optimizer.step()
-        lr_scheduler.step()
         optimizer.zero_grad()
 
         print_message(batch_idx, train_loss / (batch_idx+1))
