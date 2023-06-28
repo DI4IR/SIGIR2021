@@ -1,0 +1,1 @@
+python -m torch.distributed.launch                 --nproc_per_node=8                 -m src.train --triples ../qidpidtriples.train.small.tsv --queries queries.train.tsv --collection collection-dT5q-newterms_unique.tsv
